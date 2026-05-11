@@ -1,0 +1,146 @@
+"""FastAPI REST API server for Vectory."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+
+from vectory.api.schemas import (
+    CollectionInfoResponse,
+    CreateCollectionRequest,
+    DeleteRequest,
+    InsertRequest,
+    SearchRequest,
+    SearchResultResponse,
+    UpdateMetadataRequest,
+)
+from vectory.engine.manager import CollectionManager
+
+app = FastAPI(title="Vectory", version="0.1.0", description="Vector DB Platform")
+
+_UI_HTML = (Path(__file__).resolve().parent.parent / "ui" / "index.html").read_text(
+    encoding="utf-8"
+)
+
+# Global manager instance — configured at startup
+manager: CollectionManager | None = None
+
+
+def get_manager() -> CollectionManager:
+    global manager
+    if manager is None:
+        manager = CollectionManager(data_dir=".vectory_data")
+    return manager
+
+
+def set_manager(m: CollectionManager) -> None:
+    global manager
+    manager = m
+
+
+# --- UI ---
+
+
+@app.get("/", response_class=HTMLResponse)
+def ui():
+    return _UI_HTML
+
+
+# --- Store info ---
+
+
+@app.get("/stores")
+def list_stores() -> list[str]:
+    return get_manager().available_stores()
+
+
+# --- Collection endpoints ---
+
+
+@app.post("/collections", status_code=201)
+def create_collection(req: CreateCollectionRequest) -> CollectionInfoResponse:
+    try:
+        info = get_manager().create_collection(
+            req.name,
+            req.dimension,
+            req.metric,
+            req.store_type,
+        )
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return CollectionInfoResponse(**info)
+
+
+@app.get("/collections")
+def list_collections() -> list[CollectionInfoResponse]:
+    return [CollectionInfoResponse(**c) for c in get_manager().list_collections()]
+
+
+@app.get("/collections/{name}")
+def get_collection(name: str) -> CollectionInfoResponse:
+    try:
+        info = get_manager().get_collection_info(name)
+    except (KeyError, FileNotFoundError):
+        raise HTTPException(404, f"Collection '{name}' not found")
+    return CollectionInfoResponse(**info)
+
+
+@app.delete("/collections/{name}", status_code=204, response_model=None)
+def delete_collection(name: str):
+    try:
+        get_manager().delete_collection(name)
+    except KeyError:
+        raise HTTPException(404, f"Collection '{name}' not found")
+
+
+# --- Vector endpoints ---
+
+
+@app.post("/collections/{name}/vectors")
+def insert_vectors(name: str, req: InsertRequest) -> dict:
+    try:
+        ids = get_manager().insert(name, req.vectors, req.ids, req.metadata)
+    except KeyError:
+        raise HTTPException(404, f"Collection '{name}' not found")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"inserted_ids": ids}
+
+
+@app.post("/collections/{name}/search")
+def search_vectors(name: str, req: SearchRequest) -> list[SearchResultResponse]:
+    try:
+        results = get_manager().search(name, req.query, req.top_k, req.filter_metadata)
+    except KeyError:
+        raise HTTPException(404, f"Collection '{name}' not found")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return [SearchResultResponse(id=r.id, score=r.score, metadata=r.metadata) for r in results]
+
+
+@app.post("/collections/{name}/get")
+def get_vectors(name: str, req: DeleteRequest) -> list[dict]:
+    try:
+        return get_manager().get(name, req.ids)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.post("/collections/{name}/delete")
+def delete_vectors(name: str, req: DeleteRequest) -> dict:
+    try:
+        deleted = get_manager().delete_vectors(name, req.ids)
+    except KeyError:
+        raise HTTPException(404, f"Collection '{name}' not found")
+    return {"deleted": deleted}
+
+
+@app.put("/collections/{name}/metadata")
+def update_metadata(name: str, req: UpdateMetadataRequest) -> dict:
+    try:
+        get_manager().update_metadata(name, req.id, req.metadata)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    return {"status": "updated"}

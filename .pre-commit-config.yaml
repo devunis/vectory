@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check-fix
+        name: ruff check --fix
+        entry: python -m ruff check --fix
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-format
+        name: ruff format
+        entry: python -m ruff format
+        language: system
+        types_or: [python, pyi]
+
+      - id: pytest
+        name: pytest
+        entry: python -m pytest tests/ -q
+        language: system
+        pass_filenames: false
