@@ -88,6 +88,13 @@ python -m vectory search my_db "[1.0, 0.0, 0.0]" --top-k 2
 python -m vectory delete my_db
 ```
 
+`--data-dir`는 전역 옵션이라 서브커맨드 앞에 위치해야 합니다.
+
+```bash
+python -m vectory --data-dir ./my_data create my_db --dimension 3
+python -m vectory --data-dir ./my_data list
+```
+
 ## 프로젝트 구조
 
 ```

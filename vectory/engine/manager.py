@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from vectory.backends.base import SearchResult, VectorStore
@@ -9,6 +10,7 @@ from vectory.backends.local import LocalStore
 
 # Registry of available store types
 STORE_REGISTRY: dict[str, type[VectorStore]] = {}
+logger = logging.getLogger(__name__)
 
 
 def _register_stores() -> None:
@@ -32,8 +34,8 @@ def _register_stores() -> None:
             importlib.import_module(pkg)
             mod = importlib.import_module(mod_name)
             STORE_REGISTRY[key] = getattr(mod, cls_name)
-        except Exception:
-            pass
+        except (ImportError, AttributeError) as exc:
+            logger.debug("Skipping optional store '%s': %s", key, exc)
 
 
 _register_stores()
@@ -75,11 +77,8 @@ class CollectionManager:
         cls = STORE_REGISTRY[store_type]
         self._stores[store_type] = cls()
         # Discover existing collections in this store
-        try:
-            for info in self._stores[store_type].list_collections():
-                self._collection_store.setdefault(info["name"], store_type)
-        except Exception:
-            pass
+        for info in self._stores[store_type].list_collections():
+            self._collection_store.setdefault(info["name"], store_type)
         return self._stores[store_type]
 
     def available_stores(self) -> list[str]:
@@ -113,14 +112,11 @@ class CollectionManager:
         result = []
         seen = set()
         for store_type, store in self._stores.items():
-            try:
-                for info in store.list_collections():
-                    if info["name"] not in seen:
-                        seen.add(info["name"])
-                        self._collection_store.setdefault(info["name"], store_type)
-                        result.append(info)
-            except Exception:
-                pass
+            for info in store.list_collections():
+                if info["name"] not in seen:
+                    seen.add(info["name"])
+                    self._collection_store.setdefault(info["name"], store_type)
+                    result.append(info)
         return sorted(result, key=lambda x: x["name"])
 
     def delete_collection(self, name: str) -> None:
