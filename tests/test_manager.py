@@ -59,3 +59,13 @@ class TestCollectionManager:
         results = mgr.search("test", [1, 0, 0], top_k=1)
         assert len(results) == 1
         assert results[0].id == "a"
+
+    def test_list_collections_propagates_store_errors(self):
+        class BrokenStore:
+            def list_collections(self):
+                raise RuntimeError("store unavailable")
+
+        mgr = CollectionManager.in_memory()
+        mgr._stores["broken"] = BrokenStore()
+        with pytest.raises(RuntimeError, match="store unavailable"):
+            mgr.list_collections()
