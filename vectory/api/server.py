@@ -107,6 +107,8 @@ def rag_ingest(req: RagIngestRequest) -> RagIngestResponse:
             chunk_overlap=req.chunk_overlap,
             embedding_dimension=req.embedding_dimension,
             contextual_prefix=req.contextual_prefix,
+            enable_raptor=req.enable_raptor,
+            raptor_group_size=req.raptor_group_size,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -126,6 +128,9 @@ def rag_search(req: RagSearchRequest) -> list[RagSearchResultResponse]:
             mmr_lambda=req.mmr_lambda,
             query_expansions=req.query_expansions,
             hypothetical_document=req.hypothetical_document,
+            reranker=req.reranker,
+            corrective_threshold=req.corrective_threshold,
+            graph_expand_k=req.graph_expand_k,
         )
     except KeyError:
         raise HTTPException(404, f"Collection '{req.collection}' not found")

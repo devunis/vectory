@@ -11,7 +11,7 @@
 - **REST API** — FastAPI 기반 HTTP API + Swagger 문서 자동 생성
 - **CLI** — 터미널에서 바로 사용 가능한 명령어 인터페이스
 - **문서 파싱** — 선택 의존성으로 PaddleOCR 로컬 파싱과 MinerU API 파싱 지원
-- **RAG 검색 전략** — BM25, 벡터 검색, Hybrid Search, RRF, MMR, HyDE-style 검색 지원
+- **RAG 검색 전략** — BM25, 벡터 검색, Hybrid Search, RRF, MMR, HyDE-style, Adaptive/Corrective/Graph/RAPTOR 검색 지원
 
 ## 설치
 
@@ -149,6 +149,27 @@ python -m vectory rag ingest docs ./sample.txt \
 python -m vectory rag search docs "에러 코드 TS-999 해결 방법" --strategy hybrid --top-k 5
 ```
 
+고급 전략도 사용할 수 있습니다.
+
+- `adaptive`: 쿼리 특성에 따라 BM25/Hybrid/MMR/Reranker를 휴리스틱으로 라우팅
+- `corrective`: 검색 결과 품질을 평가하고 낮으면 BM25 보정 검색을 추가 수행
+- `raptor`: ingest 시 만든 계층 summary chunk를 활용
+- `graph`: entity-like token을 기준으로 연결 chunk를 확장
+
+```bash
+python -m vectory rag ingest docs ./sample.txt --enable-raptor
+python -m vectory rag search docs "복잡한 관계를 비교해줘" --strategy adaptive
+python -m vectory rag search docs "검색 결과가 부족할 수 있는 질문" --strategy corrective
+python -m vectory rag search docs "문서 전체 주제" --strategy raptor
+python -m vectory rag search docs "Alice ProjectX 관계" --strategy graph
+```
+
+초기 검색 결과를 다시 정렬하려면 lexical reranker를 적용할 수 있습니다.
+
+```bash
+python -m vectory rag search docs "정확한 키워드" --strategy hybrid --reranker lexical
+```
+
 쿼리 확장/RAG-Fusion 스타일 검색은 `--expand`를 여러 번 넘겨 사용할 수 있습니다.
 
 ```bash
@@ -191,7 +212,7 @@ vectory/
 │   ├── schemas.py     # Pydantic 요청/응답 스키마
 │   └── server.py      # FastAPI REST API
 ├── parsing/           # PaddleOCR / MinerU 문서 파싱 어댑터
-├── rag/               # Chunking, BM25, Hybrid/RRF/MMR RAG 검색
+├── rag/               # Chunking, BM25, Hybrid/RRF/MMR, Adaptive/Corrective/Graph/RAPTOR 검색
 └── cli/
     └── main.py        # Click CLI
 ```

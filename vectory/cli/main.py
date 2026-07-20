@@ -233,6 +233,8 @@ def rag() -> None:
 @click.option("--chunk-overlap", default=40, type=int, help="Chunk overlap in words")
 @click.option("--embedding-dimension", default=384, type=int, help="Hash embedding dimension")
 @click.option("--contextual-prefix", help="Context prefix prepended to every chunk")
+@click.option("--enable-raptor", is_flag=True, help="Create RAPTOR-style summary chunks")
+@click.option("--raptor-group-size", default=4, type=int, help="Leaf chunks per RAPTOR summary")
 @click.pass_context
 def rag_ingest(
     ctx: click.Context,
@@ -244,6 +246,8 @@ def rag_ingest(
     chunk_overlap: int,
     embedding_dimension: int,
     contextual_prefix: str | None,
+    enable_raptor: bool,
+    raptor_group_size: int,
 ) -> None:
     """Ingest a text file into a RAG collection."""
     from vectory.rag import RagPipeline
@@ -261,6 +265,8 @@ def rag_ingest(
             chunk_overlap=chunk_overlap,
             embedding_dimension=embedding_dimension,
             contextual_prefix=contextual_prefix,
+            enable_raptor=enable_raptor,
+            raptor_group_size=raptor_group_size,
         )
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
@@ -274,7 +280,7 @@ def rag_ingest(
 @click.option(
     "--strategy",
     default="hybrid",
-    type=click.Choice(["vector", "bm25", "hybrid"]),
+    type=click.Choice(["vector", "bm25", "hybrid", "adaptive", "corrective", "raptor", "graph"]),
     help="Retrieval strategy",
 )
 @click.option("--top-k", "-k", default=5, type=int, help="Number of final results")
@@ -285,6 +291,13 @@ def rag_ingest(
 @click.option(
     "--hyde", "hypothetical_document", help="Hypothetical document text for HyDE-style search"
 )
+@click.option(
+    "--reranker",
+    type=click.Choice(["lexical", "none"]),
+    help="Optional reranker to apply after retrieval",
+)
+@click.option("--corrective-threshold", default=0.35, type=float, help="CRAG confidence threshold")
+@click.option("--graph-expand-k", default=5, type=int, help="Number of graph expansion chunks")
 @click.pass_context
 def rag_search(
     ctx: click.Context,
@@ -297,6 +310,9 @@ def rag_search(
     mmr_lambda: float | None,
     query_expansions: tuple[str, ...],
     hypothetical_document: str | None,
+    reranker: str | None,
+    corrective_threshold: float,
+    graph_expand_k: int,
 ) -> None:
     """Search a RAG collection."""
     from vectory.rag import RagPipeline
@@ -312,6 +328,9 @@ def rag_search(
             mmr_lambda=mmr_lambda,
             query_expansions=list(query_expansions),
             hypothetical_document=hypothetical_document,
+            reranker=reranker,
+            corrective_threshold=corrective_threshold,
+            graph_expand_k=graph_expand_k,
         )
     except (KeyError, ValueError) as e:
         click.echo(f"Error: {e}", err=True)

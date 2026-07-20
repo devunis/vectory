@@ -58,6 +58,8 @@ class RagIngestRequest(BaseModel):
     chunk_overlap: int = Field(default=40, ge=0)
     embedding_dimension: int = Field(default=384, gt=0)
     contextual_prefix: str | None = None
+    enable_raptor: bool = False
+    raptor_group_size: int = Field(default=4, gt=1)
 
 
 class RagSearchRequest(BaseModel):
@@ -70,6 +72,9 @@ class RagSearchRequest(BaseModel):
     mmr_lambda: float | None = Field(default=None, ge=0, le=1)
     query_expansions: list[str] | None = None
     hypothetical_document: str | None = None
+    reranker: str | None = None
+    corrective_threshold: float = Field(default=0.35, ge=0, le=1)
+    graph_expand_k: int = Field(default=5, ge=0, le=100)
 
 
 class SearchResultResponse(BaseModel):
@@ -91,6 +96,7 @@ class RagIngestResponse(BaseModel):
     collection: str
     document_id: str
     chunk_count: int
+    summary_count: int = 0
     chunk_ids: list[str]
     embedding_dimension: int
 
