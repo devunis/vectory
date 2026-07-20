@@ -258,6 +258,42 @@
     background: var(--surface2);
     border: 1px solid var(--border);
   }
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    color: var(--text2);
+    font-size: 13px;
+  }
+  .check-row input { width: 16px; height: 16px; }
+  .result-card {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .result-card .result-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    color: var(--text2);
+    font-size: 12px;
+  }
+  .result-card .result-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .json-view {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.45;
+  }
 </style>
 </head>
 <body>
@@ -309,6 +345,25 @@ function toast(msg, type = 'success') {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3000);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function optionalNumber(id) {
+  const value = document.getElementById(id).value.trim();
+  return value === '' ? null : Number(value);
+}
+
+function optionalText(id) {
+  const value = document.getElementById(id).value.trim();
+  return value === '' ? null : value;
 }
 
 // --- Collections ---
@@ -413,6 +468,213 @@ function renderCollection(col) {
       </div>
 
       <div class="section">
+        <div class="section-header">RAG Ingest</div>
+        <div class="section-body">
+          <div class="form-group" style="margin-bottom:12px">
+            <label>Document Text</label>
+            <textarea id="ragText" placeholder="Paste text to chunk, embed, and store for RAG retrieval."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Document ID</label>
+              <input id="ragDocId" placeholder="optional-stable-id">
+            </div>
+            <div class="form-group">
+              <label>Metadata JSON</label>
+              <input id="ragMetadata" placeholder='{"source": "manual"}'>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Chunk Size</label>
+              <input id="ragChunkSize" type="number" value="200" min="1">
+            </div>
+            <div class="form-group">
+              <label>Chunk Overlap</label>
+              <input id="ragChunkOverlap" type="number" value="40" min="0">
+            </div>
+            <div class="form-group">
+              <label>Embedding Dimension</label>
+              <input id="ragEmbeddingDimension" type="number" value="${col.dimension}" min="1">
+            </div>
+            <div class="form-group">
+              <label>RAPTOR Group Size</label>
+              <input id="ragRaptorGroupSize" type="number" value="4" min="2">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex:3">
+              <label>Contextual Prefix</label>
+              <input id="ragContextualPrefix" placeholder="Optional context prepended to every chunk">
+            </div>
+            <div class="form-group" style="flex:1">
+              <label>RAPTOR</label>
+              <div class="check-row"><input id="ragEnableRaptor" type="checkbox"> Enable summaries</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="ragIngest('${col.name}')">Ingest Text</button>
+          <div id="ragIngestResults" style="margin-top:16px"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">RAG Search</div>
+        <div class="section-body">
+          <div class="form-row">
+            <div class="form-group" style="flex:3">
+              <label>Question / Query</label>
+              <input id="ragQuery" placeholder="Ask against ingested documents">
+            </div>
+            <div class="form-group">
+              <label>Strategy</label>
+              <select id="ragStrategy">
+                <option value="hybrid">Hybrid</option>
+                <option value="vector">Vector</option>
+                <option value="bm25">BM25</option>
+                <option value="adaptive">Adaptive</option>
+                <option value="corrective">Corrective</option>
+                <option value="raptor">RAPTOR</option>
+                <option value="graph">Graph</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Reranker</label>
+              <select id="ragReranker">
+                <option value="">None</option>
+                <option value="lexical">Lexical</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Top K</label>
+              <input id="ragTopK" type="number" value="5" min="1" max="100">
+            </div>
+            <div class="form-group">
+              <label>Candidate K</label>
+              <input id="ragCandidateK" type="number" value="30" min="1" max="1000">
+            </div>
+            <div class="form-group">
+              <label>RRF K</label>
+              <input id="ragRrfK" type="number" value="60" min="1">
+            </div>
+            <div class="form-group">
+              <label>MMR Lambda</label>
+              <input id="ragMmrLambda" type="number" min="0" max="1" step="0.05" placeholder="optional">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Corrective Threshold</label>
+              <input id="ragCorrectiveThreshold" type="number" min="0" max="1" step="0.05" value="0.35">
+            </div>
+            <div class="form-group">
+              <label>Graph Expand K</label>
+              <input id="ragGraphExpandK" type="number" min="0" max="100" value="5">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label>Query Expansions (one per line)</label>
+            <textarea id="ragExpansions" placeholder="PDF table extraction&#10;OCR scanned document recognition"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label>HyDE Hypothetical Document</label>
+            <textarea id="ragHyde" placeholder="Optional hypothetical answer document used as vector query"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="ragSearch('${col.name}')">Search RAG</button>
+          <div id="ragSearchResults" style="margin-top:16px"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">Document Parsing</div>
+        <div class="section-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Provider</label>
+              <select id="parseProvider">
+                <option value="paddleocr">PaddleOCR</option>
+                <option value="mineru">MinerU</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Source Type</label>
+              <select id="parseSourceType">
+                <option value="path">Local Path</option>
+                <option value="url">URL</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:3">
+              <label>Source</label>
+              <input id="parseSource" placeholder="./sample.pdf or https://example.com/sample.pdf">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Paddle Mode</label>
+              <select id="parseMode">
+                <option value="ocr">OCR</option>
+                <option value="structure">Structure</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Paddle Engine</label>
+              <select id="parseEngine">
+                <option value="paddle">Paddle</option>
+                <option value="transformers">Transformers</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Language</label>
+              <input id="parseLanguage" value="ch">
+            </div>
+            <div class="form-group">
+              <label>Page Range</label>
+              <input id="parsePageRange" placeholder="1-3">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Output Dir</label>
+              <input id="parseOutputDir" placeholder="./parsed">
+            </div>
+            <div class="form-group">
+              <label>RAG Ingest</label>
+              <div class="check-row"><input id="parseIngestRag" type="checkbox"> Ingest parsed text</div>
+            </div>
+            <div class="form-group">
+              <label>RAG Document ID</label>
+              <input id="parseIngestDocId" placeholder="optional-doc-id">
+            </div>
+            <div class="form-group">
+              <label>Wait</label>
+              <div class="check-row"><input id="parseWait" type="checkbox" checked> Wait for result</div>
+            </div>
+            <div class="form-group">
+              <label>Markdown</label>
+              <div class="check-row"><input id="parseFetchMarkdown" type="checkbox"> Fetch markdown</div>
+            </div>
+            <div class="form-group">
+              <label>MinerU OCR</label>
+              <div class="check-row"><input id="parseIsOcr" type="checkbox"> OCR mode</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tables</label>
+              <div class="check-row"><input id="parseEnableTable" type="checkbox" checked> Enable table recognition</div>
+            </div>
+            <div class="form-group">
+              <label>Formula</label>
+              <div class="check-row"><input id="parseEnableFormula" type="checkbox" checked> Enable formula recognition</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="parseDocument('${col.name}')">Parse Document</button>
+          <div id="parseResults" style="margin-top:16px"></div>
+        </div>
+      </div>
+
+      <div class="section">
         <div class="section-header">Get / Delete Vectors</div>
         <div class="section-body">
           <div class="form-group" style="margin-bottom:12px">
@@ -473,6 +735,150 @@ async function searchVectors(name) {
         `).join('')}</tbody>
       </table>
     `;
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function ragIngest(name) {
+  try {
+    const metadataVal = document.getElementById('ragMetadata').value.trim();
+    const body = {
+      collection: name,
+      text: document.getElementById('ragText').value,
+      document_id: optionalText('ragDocId'),
+      metadata: metadataVal ? JSON.parse(metadataVal) : null,
+      chunk_size: parseInt(document.getElementById('ragChunkSize').value),
+      chunk_overlap: parseInt(document.getElementById('ragChunkOverlap').value),
+      embedding_dimension: parseInt(document.getElementById('ragEmbeddingDimension').value),
+      contextual_prefix: optionalText('ragContextualPrefix'),
+      enable_raptor: document.getElementById('ragEnableRaptor').checked,
+      raptor_group_size: parseInt(document.getElementById('ragRaptorGroupSize').value),
+    };
+    const result = await api('POST', '/rag/ingest', body);
+    document.getElementById('ragIngestResults').innerHTML = `
+      <div class="result-card">
+        <div class="result-meta">
+          <span class="badge">${escapeHtml(result.collection)}</span>
+          <span>${escapeHtml(result.document_id)}</span>
+          <span>${result.chunk_count} chunks</span>
+          <span>${result.summary_count || 0} summaries</span>
+          <span>${result.embedding_dimension}D</span>
+        </div>
+        <div class="json-view mono">${escapeHtml(JSON.stringify(result.chunk_ids, null, 2))}</div>
+      </div>
+    `;
+    toast(`Ingested ${result.chunk_count} chunks`);
+    await loadCollections();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function ragSearch(name) {
+  try {
+    const expansions = document.getElementById('ragExpansions').value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    const mmrLambda = optionalNumber('ragMmrLambda');
+    const reranker = document.getElementById('ragReranker').value;
+    const body = {
+      collection: name,
+      query: document.getElementById('ragQuery').value,
+      strategy: document.getElementById('ragStrategy').value,
+      top_k: parseInt(document.getElementById('ragTopK').value),
+      candidate_k: parseInt(document.getElementById('ragCandidateK').value),
+      rrf_k: parseInt(document.getElementById('ragRrfK').value),
+      mmr_lambda: mmrLambda,
+      query_expansions: expansions.length ? expansions : null,
+      hypothetical_document: optionalText('ragHyde'),
+      reranker: reranker || null,
+      corrective_threshold: Number(document.getElementById('ragCorrectiveThreshold').value),
+      graph_expand_k: parseInt(document.getElementById('ragGraphExpandK').value),
+    };
+    const results = await api('POST', '/rag/search', body);
+    renderRagResults(results, 'ragSearchResults');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function renderRagResults(results, containerId) {
+  const container = document.getElementById(containerId);
+  if (results.length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:13px;">No RAG results found</div>';
+    return;
+  }
+  container.innerHTML = results.map((r, i) => `
+    <div class="result-card">
+      <div class="result-meta">
+        <span class="badge">#${i + 1}</span>
+        <span class="mono">${escapeHtml(r.id)}</span>
+        <span>doc=${escapeHtml(r.document_id)}</span>
+        <span>score=${Number(r.score).toFixed(6)}</span>
+      </div>
+      <div class="result-text">${escapeHtml(r.text)}</div>
+      <div class="json-view mono" style="margin-top:8px;color:var(--text2);">${escapeHtml(JSON.stringify({ metadata: r.metadata, scores: r.scores }, null, 2))}</div>
+    </div>
+  `).join('');
+}
+
+async function parseDocument(collectionName) {
+  try {
+    const body = {
+      provider: document.getElementById('parseProvider').value,
+      source: document.getElementById('parseSource').value,
+      source_type: document.getElementById('parseSourceType').value,
+      mode: document.getElementById('parseMode').value,
+      engine: document.getElementById('parseEngine').value,
+      output_dir: optionalText('parseOutputDir'),
+      wait: document.getElementById('parseWait').checked,
+      fetch_markdown: document.getElementById('parseFetchMarkdown').checked,
+      language: document.getElementById('parseLanguage').value,
+      page_range: optionalText('parsePageRange'),
+      enable_table: document.getElementById('parseEnableTable').checked,
+      enable_formula: document.getElementById('parseEnableFormula').checked,
+      is_ocr: document.getElementById('parseIsOcr').checked,
+    };
+    const result = await api('POST', '/parse', body);
+    let ingestResult = null;
+    if (document.getElementById('parseIngestRag').checked) {
+      const parsedText = result.markdown || result.text || '';
+      if (!parsedText.trim()) {
+        throw new Error('Parsed result did not include text or markdown to ingest');
+      }
+      ingestResult = await api('POST', '/rag/ingest', {
+        collection: collectionName,
+        text: parsedText,
+        document_id: optionalText('parseIngestDocId') || result.source,
+        metadata: {
+          source: result.source,
+          provider: result.provider,
+          source_type: body.source_type,
+        },
+        chunk_size: parseInt(document.getElementById('ragChunkSize').value),
+        chunk_overlap: parseInt(document.getElementById('ragChunkOverlap').value),
+        embedding_dimension: parseInt(document.getElementById('ragEmbeddingDimension').value),
+        contextual_prefix: optionalText('ragContextualPrefix'),
+        enable_raptor: document.getElementById('ragEnableRaptor').checked,
+        raptor_group_size: parseInt(document.getElementById('ragRaptorGroupSize').value),
+      });
+      await loadCollections();
+    }
+    document.getElementById('parseResults').innerHTML = `
+      <div class="result-card">
+        <div class="result-meta">
+          <span class="badge">${escapeHtml(result.provider)}</span>
+          <span>${escapeHtml(result.source)}</span>
+          <span>${escapeHtml(result.metadata && result.metadata.state || '')}</span>
+          ${ingestResult ? `<span>${ingestResult.chunk_count} RAG chunks</span>` : ''}
+        </div>
+        <div class="result-text">${escapeHtml(result.markdown || result.text || '')}</div>
+        <div class="json-view mono" style="margin-top:8px;color:var(--text2);">${escapeHtml(JSON.stringify({ parse: result, ingest: ingestResult }, null, 2))}</div>
+      </div>
+    `;
+    toast(ingestResult ? 'Document parsed and ingested' : 'Document parsed');
   } catch (e) {
     toast(e.message, 'error');
   }

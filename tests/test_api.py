@@ -21,6 +21,13 @@ class TestCollectionAPI:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "Vectory" in resp.text
+        assert "RAG Ingest" in resp.text
+        assert "RAG Search" in resp.text
+        assert "Document Parsing" in resp.text
+        assert "Ingest parsed text" in resp.text
+        assert "/rag/ingest" in resp.text
+        assert "/rag/search" in resp.text
+        assert "/parse" in resp.text
 
     def test_list_stores(self):
         resp = client.get("/stores")
