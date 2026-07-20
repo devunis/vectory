@@ -11,6 +11,7 @@
 - **REST API** — FastAPI 기반 HTTP API + Swagger 문서 자동 생성
 - **CLI** — 터미널에서 바로 사용 가능한 명령어 인터페이스
 - **문서 파싱** — 선택 의존성으로 PaddleOCR 로컬 파싱과 MinerU API 파싱 지원
+- **RAG 검색 전략** — BM25, 벡터 검색, Hybrid Search, RRF, MMR, HyDE-style 검색 지원
 
 ## 설치
 
@@ -131,6 +132,51 @@ curl -X POST http://localhost:8000/parse \
   -d '{"provider": "mineru", "source": "https://example.com/sample.pdf", "source_type": "url"}'
 ```
 
+### RAG 검색
+
+텍스트 파일을 chunk로 나눠 RAG 컬렉션에 넣습니다. 기본 임베딩은 외부 의존성 없는 해시 기반 baseline이라, 운영에서는 별도 embedding provider를 붙이는 용도로 확장하면 됩니다.
+
+```bash
+python -m vectory rag ingest docs ./sample.txt \
+  --document-id sample \
+  --chunk-size 200 \
+  --chunk-overlap 40
+```
+
+검색 전략은 `vector`, `bm25`, `hybrid`를 지원합니다. `hybrid`는 벡터 검색과 BM25 결과를 Reciprocal Rank Fusion(RRF)으로 합칩니다.
+
+```bash
+python -m vectory rag search docs "에러 코드 TS-999 해결 방법" --strategy hybrid --top-k 5
+```
+
+쿼리 확장/RAG-Fusion 스타일 검색은 `--expand`를 여러 번 넘겨 사용할 수 있습니다.
+
+```bash
+python -m vectory rag search docs "문서 파싱" \
+  --expand "PDF 테이블 추출" \
+  --expand "OCR 스캔 문서 인식"
+```
+
+HyDE-style 검색은 외부 LLM이 만든 hypothetical document를 `--hyde`로 넘겨 벡터 검색 질의로 사용합니다.
+
+```bash
+python -m vectory rag search docs "영수증 텍스트 추출" \
+  --strategy vector \
+  --hyde "PaddleOCR로 스캔된 영수증에서 품목과 금액을 추출하는 문서"
+```
+
+REST API:
+
+```bash
+curl -X POST http://localhost:8000/rag/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"collection": "docs", "text": "Vectory supports hybrid RAG search.", "document_id": "doc1"}'
+
+curl -X POST http://localhost:8000/rag/search \
+  -H "Content-Type: application/json" \
+  -d '{"collection": "docs", "query": "hybrid RAG", "strategy": "hybrid"}'
+```
+
 ## 프로젝트 구조
 
 ```
@@ -145,6 +191,7 @@ vectory/
 │   ├── schemas.py     # Pydantic 요청/응답 스키마
 │   └── server.py      # FastAPI REST API
 ├── parsing/           # PaddleOCR / MinerU 문서 파싱 어댑터
+├── rag/               # Chunking, BM25, Hybrid/RRF/MMR RAG 검색
 └── cli/
     └── main.py        # Click CLI
 ```

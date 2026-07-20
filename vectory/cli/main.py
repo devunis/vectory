@@ -219,6 +219,106 @@ def parse(
     click.echo(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
 
 
+@cli.group()
+def rag() -> None:
+    """RAG ingestion and retrieval commands."""
+
+
+@rag.command("ingest")
+@click.argument("collection")
+@click.argument("text_file", type=click.Path(exists=True))
+@click.option("--document-id", help="Stable document ID")
+@click.option("--metadata-json", help="JSON metadata object for the document")
+@click.option("--chunk-size", default=200, type=int, help="Chunk size in words")
+@click.option("--chunk-overlap", default=40, type=int, help="Chunk overlap in words")
+@click.option("--embedding-dimension", default=384, type=int, help="Hash embedding dimension")
+@click.option("--contextual-prefix", help="Context prefix prepended to every chunk")
+@click.pass_context
+def rag_ingest(
+    ctx: click.Context,
+    collection: str,
+    text_file: str,
+    document_id: str | None,
+    metadata_json: str | None,
+    chunk_size: int,
+    chunk_overlap: int,
+    embedding_dimension: int,
+    contextual_prefix: str | None,
+) -> None:
+    """Ingest a text file into a RAG collection."""
+    from vectory.rag import RagPipeline
+
+    with open(text_file, "r", encoding="utf-8") as f:
+        text = f.read()
+    metadata = json.loads(metadata_json) if metadata_json else None
+    try:
+        result = RagPipeline(ctx.obj["manager"]).ingest_text(
+            collection,
+            text,
+            document_id=document_id,
+            metadata=metadata,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            embedding_dimension=embedding_dimension,
+            contextual_prefix=contextual_prefix,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+    click.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@rag.command("search")
+@click.argument("collection")
+@click.argument("query")
+@click.option(
+    "--strategy",
+    default="hybrid",
+    type=click.Choice(["vector", "bm25", "hybrid"]),
+    help="Retrieval strategy",
+)
+@click.option("--top-k", "-k", default=5, type=int, help="Number of final results")
+@click.option("--candidate-k", default=30, type=int, help="Number of candidates per retriever")
+@click.option("--rrf-k", default=60, type=int, help="RRF rank constant")
+@click.option("--mmr-lambda", type=float, help="Apply MMR with this relevance/diversity weight")
+@click.option("--expand", "query_expansions", multiple=True, help="Additional rewritten query")
+@click.option(
+    "--hyde", "hypothetical_document", help="Hypothetical document text for HyDE-style search"
+)
+@click.pass_context
+def rag_search(
+    ctx: click.Context,
+    collection: str,
+    query: str,
+    strategy: str,
+    top_k: int,
+    candidate_k: int,
+    rrf_k: int,
+    mmr_lambda: float | None,
+    query_expansions: tuple[str, ...],
+    hypothetical_document: str | None,
+) -> None:
+    """Search a RAG collection."""
+    from vectory.rag import RagPipeline
+
+    try:
+        results = RagPipeline(ctx.obj["manager"]).search(
+            collection,
+            query,
+            strategy=strategy,
+            top_k=top_k,
+            candidate_k=candidate_k,
+            rrf_k=rrf_k,
+            mmr_lambda=mmr_lambda,
+            query_expansions=list(query_expansions),
+            hypothetical_document=hypothetical_document,
+        )
+    except (KeyError, ValueError) as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+    click.echo(json.dumps([result.to_dict() for result in results], ensure_ascii=False, indent=2))
+
+
 @cli.command()
 @click.option("--host", default="0.0.0.0", help="Bind host")
 @click.option("--port", default=8000, type=int, help="Bind port")

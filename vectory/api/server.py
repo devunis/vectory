@@ -14,12 +14,17 @@ from vectory.api.schemas import (
     InsertRequest,
     ParseRequest,
     ParseResponse,
+    RagIngestRequest,
+    RagIngestResponse,
+    RagSearchRequest,
+    RagSearchResultResponse,
     SearchRequest,
     SearchResultResponse,
     UpdateMetadataRequest,
 )
 from vectory.engine.manager import CollectionManager
 from vectory.parsing import parse_document
+from vectory.rag import RagPipeline
 
 app = FastAPI(title="Vectory", version="0.1.0", description="Vector DB Platform")
 
@@ -85,6 +90,48 @@ def parse_source(req: ParseRequest) -> ParseResponse:
     except (RuntimeError, TimeoutError) as e:
         raise HTTPException(502, str(e))
     return ParseResponse(**parsed.to_dict())
+
+
+# --- RAG ---
+
+
+@app.post("/rag/ingest")
+def rag_ingest(req: RagIngestRequest) -> RagIngestResponse:
+    try:
+        result = RagPipeline(get_manager()).ingest_text(
+            req.collection,
+            req.text,
+            document_id=req.document_id,
+            metadata=req.metadata,
+            chunk_size=req.chunk_size,
+            chunk_overlap=req.chunk_overlap,
+            embedding_dimension=req.embedding_dimension,
+            contextual_prefix=req.contextual_prefix,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return RagIngestResponse(**result)
+
+
+@app.post("/rag/search")
+def rag_search(req: RagSearchRequest) -> list[RagSearchResultResponse]:
+    try:
+        results = RagPipeline(get_manager()).search(
+            req.collection,
+            req.query,
+            strategy=req.strategy,
+            top_k=req.top_k,
+            candidate_k=req.candidate_k,
+            rrf_k=req.rrf_k,
+            mmr_lambda=req.mmr_lambda,
+            query_expansions=req.query_expansions,
+            hypothetical_document=req.hypothetical_document,
+        )
+    except KeyError:
+        raise HTTPException(404, f"Collection '{req.collection}' not found")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return [RagSearchResultResponse(**result.to_dict()) for result in results]
 
 
 # --- Collection endpoints ---
