@@ -144,6 +144,81 @@ def stores() -> None:
         click.echo(f"  {name}")
 
 
+@cli.command("parse")
+@click.argument("source")
+@click.option(
+    "--provider",
+    default="paddleocr",
+    type=click.Choice(["paddleocr", "mineru"]),
+    help="Parsing provider",
+)
+@click.option(
+    "--source-type",
+    default="path",
+    type=click.Choice(["path", "url"]),
+    help="Source location type",
+)
+@click.option(
+    "--mode",
+    default="ocr",
+    type=click.Choice(["ocr", "structure"]),
+    help="PaddleOCR parsing mode",
+)
+@click.option(
+    "--engine",
+    default="paddle",
+    type=click.Choice(["paddle", "transformers"]),
+    help="PaddleOCR inference engine",
+)
+@click.option("--output-dir", type=click.Path(), help="Directory for provider output files")
+@click.option("--language", default="ch", help="MinerU language code")
+@click.option("--page-range", help="MinerU page range, for example 1-3")
+@click.option("--disable-table", is_flag=True, help="Disable MinerU table recognition")
+@click.option("--disable-formula", is_flag=True, help="Disable MinerU formula recognition")
+@click.option("--ocr/--no-ocr", "is_ocr", default=False, help="Enable MinerU OCR mode")
+@click.option("--no-wait", is_flag=True, help="Return after MinerU task submission")
+@click.option("--fetch-markdown", is_flag=True, help="Fetch MinerU markdown when available")
+def parse(
+    source: str,
+    provider: str,
+    source_type: str,
+    mode: str,
+    engine: str,
+    output_dir: str | None,
+    language: str,
+    page_range: str | None,
+    disable_table: bool,
+    disable_formula: bool,
+    is_ocr: bool,
+    no_wait: bool,
+    fetch_markdown: bool,
+) -> None:
+    """Parse a document or image with PaddleOCR or MinerU."""
+    from vectory.parsing import parse_document
+
+    try:
+        result = parse_document(
+            source,
+            provider=provider,
+            source_type=source_type,
+            output_dir=output_dir,
+            wait=not no_wait,
+            fetch_markdown=fetch_markdown,
+            mode=mode,
+            engine=engine,
+            language=language,
+            page_range=page_range,
+            enable_table=not disable_table,
+            enable_formula=not disable_formula,
+            is_ocr=is_ocr,
+        )
+    except (RuntimeError, TimeoutError, ValueError) as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    click.echo(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+
+
 @cli.command()
 @click.option("--host", default="0.0.0.0", help="Bind host")
 @click.option("--port", default=8000, type=int, help="Bind port")

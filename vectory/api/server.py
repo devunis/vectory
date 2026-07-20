@@ -12,11 +12,14 @@ from vectory.api.schemas import (
     CreateCollectionRequest,
     DeleteRequest,
     InsertRequest,
+    ParseRequest,
+    ParseResponse,
     SearchRequest,
     SearchResultResponse,
     UpdateMetadataRequest,
 )
 from vectory.engine.manager import CollectionManager
+from vectory.parsing import parse_document
 
 app = FastAPI(title="Vectory", version="0.1.0", description="Vector DB Platform")
 
@@ -54,6 +57,34 @@ def ui():
 @app.get("/stores")
 def list_stores() -> list[str]:
     return get_manager().available_stores()
+
+
+# --- Document parsing ---
+
+
+@app.post("/parse")
+def parse_source(req: ParseRequest) -> ParseResponse:
+    try:
+        parsed = parse_document(
+            req.source,
+            provider=req.provider,
+            source_type=req.source_type,
+            output_dir=req.output_dir,
+            wait=req.wait,
+            fetch_markdown=req.fetch_markdown,
+            mode=req.mode,
+            engine=req.engine,
+            language=req.language,
+            page_range=req.page_range,
+            enable_table=req.enable_table,
+            enable_formula=req.enable_formula,
+            is_ocr=req.is_ocr,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except (RuntimeError, TimeoutError) as e:
+        raise HTTPException(502, str(e))
+    return ParseResponse(**parsed.to_dict())
 
 
 # --- Collection endpoints ---

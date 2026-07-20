@@ -10,6 +10,7 @@
 - **영속화** — JSON 파일 기반 자동 저장/로드
 - **REST API** — FastAPI 기반 HTTP API + Swagger 문서 자동 생성
 - **CLI** — 터미널에서 바로 사용 가능한 명령어 인터페이스
+- **문서 파싱** — 선택 의존성으로 PaddleOCR 로컬 파싱과 MinerU API 파싱 지원
 
 ## 설치
 
@@ -21,6 +22,12 @@ pip install -e .
 
 ```bash
 pip install -e ".[dev]"
+```
+
+문서 파싱 기능 포함:
+
+```bash
+pip install -e ".[parse]"
 ```
 
 ## 빠른 시작
@@ -95,6 +102,35 @@ python -m vectory --data-dir ./my_data create my_db --dimension 3
 python -m vectory --data-dir ./my_data list
 ```
 
+### 문서 파싱
+
+PaddleOCR 로컬 OCR:
+
+```bash
+python -m vectory parse ./sample.png --provider paddleocr
+```
+
+PaddleOCR 문서 구조 파싱:
+
+```bash
+python -m vectory parse ./sample.png --provider paddleocr --mode structure --output-dir ./parsed
+```
+
+MinerU Agent 경량 API 파싱:
+
+```bash
+python -m vectory parse ./sample.pdf --provider mineru --fetch-markdown
+python -m vectory parse https://example.com/sample.pdf --provider mineru --source-type url --fetch-markdown
+```
+
+REST API에서도 같은 기능을 사용할 수 있습니다.
+
+```bash
+curl -X POST http://localhost:8000/parse \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "mineru", "source": "https://example.com/sample.pdf", "source_type": "url"}'
+```
+
 ## 프로젝트 구조
 
 ```
@@ -108,6 +144,7 @@ vectory/
 ├── api/
 │   ├── schemas.py     # Pydantic 요청/응답 스키마
 │   └── server.py      # FastAPI REST API
+├── parsing/           # PaddleOCR / MinerU 문서 파싱 어댑터
 └── cli/
     └── main.py        # Click CLI
 ```
